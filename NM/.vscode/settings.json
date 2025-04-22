@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "complex": "cpp",
+        "iomanip": "cpp"
+    },
+    "cmake.ignoreCMakeListsMissing": true
+}

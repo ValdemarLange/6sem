@@ -1,0 +1,240 @@
+#include <iostream>
+#include "nr3.h"
+#include "utilities.h"
+#include "ludcmp.h"
+#include <cmath>
+
+template<class T>
+void lnsrch(VecDoub_I &xold, const Doub fold, VecDoub_I &g, VecDoub_IO &p,
+            VecDoub_O &x, Doub &f, const Doub stpmax, Bool &check, T &func) {
+    const Doub ALF = 1.0e-4, TOLX = std::numeric_limits<Doub>::epsilon();
+    Doub a, alam, alam2 = 0.0, alamin, b, disc, f2 = 0.0;
+    Doub rhs1, rhs2, slope = 0.0, sum = 0.0, temp, test, tmplam;
+    Int i, n = xold.size();
+    check = false;
+    for (i = 0; i < n; i++) sum += p[i] * p[i];
+    sum = sqrt(sum);
+    if (sum > stpmax)
+        for (i = 0; i < n; i++)
+            p[i] *= stpmax / sum;
+    for (i = 0; i < n; i++)
+        slope += g[i] * p[i];
+    if (slope >= 0.0) throw("Roundoff problem in lnsrch.");
+    test = 0.0;
+    for (i = 0; i < n; i++) {
+        temp = abs(p[i]) / MAX(abs(xold[i]), 1.0);
+        if (temp > test) test = temp;
+    }
+    alamin = TOLX / test;
+    alam = 1.0;
+    for (;;) {
+        for (i = 0; i < n; i++) x[i] = xold[i] + alam * p[i];
+        f = func(x);
+        if (alam < alamin) {
+            for (i = 0; i < n; i++) x[i] = xold[i];
+            check = true;
+            return;
+        } else if (f <= fold + ALF * alam * slope) return;
+        else {
+            if (alam == 1.0)
+                tmplam = -slope / (2.0 * (f - fold - slope));
+            else {
+                rhs1 = f - fold - alam * slope;
+                rhs2 = f2 - fold - alam2 * slope;
+                a = (rhs1 / (alam * alam) - rhs2 / (alam2 * alam2)) / (alam - alam2);
+                b = (-alam2 * rhs1 / (alam * alam) + alam * rhs2 / (alam2 * alam2)) / (alam - alam2);
+                if (a == 0.0) tmplam = -slope / (2.0 * b);
+                else {
+                    disc = b * b - 3.0 * a * slope;
+                    if (disc < 0.0) tmplam = 0.5 * alam;
+                    else if (b <= 0.0) tmplam = (-b + sqrt(disc)) / (3.0 * a);
+                    else tmplam = -slope / (b + sqrt(disc));
+                }
+                if (tmplam > 0.5 * alam)
+                    tmplam = 0.5 * alam;
+            }
+        }
+        alam2 = alam;
+        f2 = f;
+        alam = MAX(tmplam, 0.1 * alam);
+    }
+}
+
+template<class T>
+struct NRfdjac {
+    const Doub EPS;
+    T &func;
+
+    NRfdjac(T &funcc) : EPS(1.0e-8), func(funcc) {}
+
+    MatDoub operator()(VecDoub_I &x, VecDoub_I &fvec) {
+        Int n = x.size();
+        MatDoub df(n, n);
+        VecDoub xh = x;
+        for (Int j = 0; j < n; j++) {
+            Doub temp = xh[j];
+            Doub h = EPS * abs(temp);
+            if (h == 0.0) h = EPS;
+            xh[j] = temp + h;
+            h = xh[j] - temp;
+            VecDoub f = func(xh);
+            xh[j] = temp;
+            for (Int i = 0; i < n; i++)
+                df[i][j] = (f[i] - fvec[i]) / h;
+        }
+        return df;
+    }
+};
+
+template<class T>
+struct NRfmin {
+    VecDoub fvec;
+    T &func;
+    Int n;
+
+    NRfmin(T &funcc) : func(funcc) {}
+
+    Doub operator()(VecDoub_I &x) {
+        n = x.size();
+        Doub sum = 0;
+        fvec = func(x);
+        for (Int i = 0; i < n; i++) sum += SQR(fvec[i]);
+        return 0.5 * sum;
+    }
+};
+
+template<class T>
+void newt(VecDoub_IO &x, Bool &check, T &vecfunc) {
+    const Int MAXITS = 200;
+    const Doub TOLF = 1.0e-8, TOLMIN = 1.0e-12, STPMX = 100.0;
+    const Doub TOLX = std::numeric_limits<Doub>::epsilon();
+    Int i, j, its, n = x.size();
+    Doub den, f, fold, stpmax, sum, temp, test;
+    VecDoub g(n), p(n), xold(n);
+    MatDoub fjac(n, n);
+    NRfmin<T> fmin(vecfunc);
+    NRfdjac<T> fdjac(vecfunc);
+    VecDoub &fvec = fmin.fvec;
+    f = fmin(x);
+    test = 0.0;
+    for (i = 0; i < n; i++)
+        if (abs(fvec[i]) > test) test = abs(fvec[i]);
+    if (test < 0.01 * TOLF) {
+        check = false;
+        return;
+    }
+    sum = 0.0;
+    for (i = 0; i < n; i++) sum += SQR(x[i]);
+    stpmax = STPMX * MAX(sqrt(sum), Doub(n));
+    for (its = 0; its < MAXITS; its++) {
+
+        double error = sqrt(pow(x[0]-xold[0],2) + pow(x[1]-xold[1],2));
+        
+        printf("Iteration %3d:     x0: %f     x1: %f     error: %10f\n", its+1, x[0],x[7], error);
+
+        fjac = fdjac(x, fvec);
+        for (i = 0; i < n; i++) {
+            sum = 0.0;
+            for (j = 0; j < n; j++) sum += fjac[j][i] * fvec[j];
+            g[i] = sum;
+        }
+        for (i = 0; i < n; i++) xold[i] = x[i];
+        fold = f;
+        for (i = 0; i < n; i++) p[i] = -fvec[i];
+        LUdcmp alu(fjac);
+        alu.solve(p, p);
+        lnsrch(xold, fold, g, p, x, f, stpmax, check, fmin);
+        test = 0.0;
+        for (i = 0; i < n; i++)
+            if (abs(fvec[i]) > test) test = abs(fvec[i]);
+        if (test < TOLF) {
+            check = false;
+            return;
+        }
+        if (check) {
+            test = 0.0;
+            den = MAX(f, 0.5 * n);
+            for (i = 0; i < n; i++) {
+                temp = abs(g[i]) * MAX(abs(x[i]), 1.0) / den;
+                if (temp > test) test = temp;
+            }
+            check = (test < TOLMIN);
+            return;
+        }
+        test = 0.0;
+        for (i = 0; i < n; i++) {
+            temp = (abs(x[i] - xold[i])) / MAX(abs(x[i]), 1.0);
+            if (temp > test) test = temp;
+        }
+        if (test < TOLX)
+            return;
+
+    }
+    throw("MAXITS exceeded in newt");
+}
+
+
+const int v = 120; //kg
+const Doub k = 2.5; //m
+const Doub w = 4.0; //kg/m
+const Doub alpha = 2 * pow(10, -7); //kg⁻1
+
+
+VecDoub equations(VecDoub_I &q)
+{
+    VecDoub f(8);
+    //Doub d = q[0];
+    Doub L0 = q[0];
+    Doub L = q[1];
+    //Doub n = q[3];
+    Doub p = q[2];
+    Doub x = q[3];
+    Doub theta = q[4];
+    Doub phi = q[5];
+    Doub a = q[6];
+    Doub H = q[7];
+
+    Doub n = 2;
+    Doub d = 30.0;
+
+    f[0] = (a*(cosh(x/a)-1))-p; //p
+    f[1] = (2*a*sinh(x/a))-L; //L
+    f[2] = (2*x + 2*k*cos(theta))-d;//d
+    f[3] = (p + k*sin(theta))-n; //n
+    f[4] = sinh(x/a) - tan(phi); //phi
+    f[5] = (1+v/(w*L0))*tan(phi) - tan(theta); //theta
+    f[6] = L0*(1+alpha*H) - L; //L
+    f[7] = (w*L0)/(2*sin(phi))-H; //H
+
+
+
+    // for(int i = 0; i < 8; i++)
+    // {
+    //     cout << f[i] << endl;
+    // }
+    return f;
+
+}
+
+
+int main(int argc, char const *argv[])
+{
+    VecDoub q(8);
+    q[0] = 27; //L0
+    q[1] = 25; //L
+    q[2] = 2; //p
+    q[3] = 13; //x
+    q[4] = M_PI/3; //theta
+    q[5] = M_PI/6; //phi
+    q[6] = 40; //a
+    q[7] = 100; //H -> skulle blive større ved mindre n
+
+    bool check;
+
+    newt(q,check,equations);
+
+    printf("L0: %f\n", q[0]);
+    printf("H: %f\n", q[7]);
+
+    return 0;
+}
