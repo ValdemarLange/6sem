@@ -58,5 +58,11 @@ int main() {
 
 	util::print(lu1.lu,"LU");
 
+	for (int i = 0; i < 3; i++)
+	{
+		cout << lu.indx[i] << endl;
+	}
+	
+
 	return 0;
 }

@@ -11,6 +11,27 @@
 
 using namespace std;
 
+void print_error(SVD SVD_A){
+    MatDoub V = SVD_A.v;
+    VecDoub W = SVD_A.w;
+
+    VecDoub dx(W.size());
+    double sum;
+    for (int i = 0; i < W.size(); i++)
+    {
+        sum = 0;
+        for (int j = 0; j < W.size(); j++)
+        {
+            if (W[i] > pow(10, -15)){
+                sum += pow(V[j][i]/W[i], 2);
+            }
+        }
+        dx[i] = sqrt(sum);
+    }
+    util::print(dx, "delta x");
+}
+
+
 int main() {
 VecDoub xFilip(82); VecDoub yFilip(82);
 ifstream Filip("FilipData.dat");
@@ -114,6 +135,7 @@ svdp.solve(b, xp);
 
 util::print(xp, "Pont SVD x:");
 
+print_error(svdp);
 
 /// ---------- SVD Filip -----------------------------
 int Mf = 82;
@@ -124,12 +146,42 @@ VecDoub x(Nf);
 svd.solve(bf, x, 1e-15);
 
 util::print(x, "Filip SVD x:");
-cout << "rank: " << svd.rank() << endl;
-cout << "nullity " << svd.nullity() << endl;
-util::print(svd.range(), "Filip range: ");
-util::print(svd.nullspace(), "Filip nullspace: ");
+// cout << "rank: " << svd.rank() << endl;
+// cout << "nullity " << svd.nullity() << endl;
+// util::print(svd.range(), "Filip range: ");
+// util::print(svd.nullspace(), "Filip nullspace: ");
 
 
+
+print_error(svd);
+
+
+// 1. Beregn residualer og residual variance
+// double sum_residuals_sq = 0.0;
+// for (int i = 0; i < Mf; i++) {
+//     double y_hat = 0.0;
+//     for (int j = 0; j < Nf; j++) {
+//         y_hat += Af[i][j] * x[j];
+//     }
+//     double r = bf[i] - y_hat;
+//     sum_residuals_sq += r * r;
+// }
+// double sigma2 = sum_residuals_sq / (Mf - Nf);  // M = datalinjer, N = parametre
+// cout << "Residual variance (s^2): " << sigma2 << endl;
+
+// // 2. Varians og standardafvigelse for hver parameter
+// for (int j = 0; j < Nf; j++) {
+//     double var_j = 0.0;
+//     for (int k = 0; k < Nf; k++) {
+//         if (svd.w[k] > 1e-15) {  // Undgå division med nul
+//             double vjk = svd.v[j][k];
+//             var_j += (vjk * vjk) / (svd.w[k] * svd.w[k]);
+//         }
+//     }
+//     var_j *= sigma2;
+//     double std_j = sqrt(var_j);
+//     cout << "Var(x_" << j << ") = " << var_j << ", Std(x_" << j << ") = " << std_j << endl;
+// }
 
 return 0;
 }

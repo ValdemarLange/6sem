@@ -1,1 +1,8 @@
 /Numerical-Recipes-master
+*master
+*.d
+*.h
+*.o
+Makefile
+*.json
+main
